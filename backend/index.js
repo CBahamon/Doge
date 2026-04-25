@@ -12,7 +12,6 @@ const PORT = process.env.PORT || 3000;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// --- MOTOR DE BÚSQUEDA (TMDB) ---
 app.get('/api/search', async (req, res) => {
     const { query } = req.query;
     try {
@@ -37,7 +36,6 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
-// --- DETALLES DE SERIE ---
 app.get('/api/tv/:id', async (req, res) => {
     try {
         const response = await axios.get(`${TMDB_BASE}/tv/${req.params.id}`, {
@@ -60,35 +58,29 @@ app.get('/api/tv/:id/season/:number', async (req, res) => {
     }
 });
 
-// --- MOTOR DE STREAMING (FIXED) ---
 app.get('/api/stream', (req, res) => {
     const { id, type, s, e } = req.query;
-    
-    console.log(`Petición Recibida - ID: ${id}, Tipo: ${type}, T: ${s}, E: ${e}`);
-
-    if (!id || !type) {
-        return res.status(400).json({ error: 'Faltan parámetros críticos (id o type)' });
-    }
-
     const season = s || 1;
     const episode = e || 1;
 
+    // vidsrc.icu y vidsrc.xyz suelen tener opciones de Latino dentro del reproductor
     const providers = {
-        vidsrc_to: type === 'movie' 
-            ? `https://vidsrc.to/embed/movie/${id}` 
-            : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`,
+        latino: type === 'movie' 
+            ? `https://vidsrc.icu/embed/movie/${id}` 
+            : `https://vidsrc.icu/embed/tv/${id}/${season}/${episode}`,
         
-        vidlink: type === 'movie'
+        original: type === 'movie'
             ? `https://vidlink.pro/movie/${id}`
             : `https://vidlink.pro/tv/${id}/${season}/${episode}`
     };
 
     res.json({ 
-        best_link: providers.vidlink // Vidlink suele ser más estable hoy
+        spanish: providers.latino,
+        english: providers.original
     });
 });
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media v3.1 (Fixed Params) on port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media v3.2 (Multilanguage) on port ${PORT}`));

@@ -57,15 +57,12 @@ const App: React.FC = () => {
     setLoading(false);
   };
 
-  const playMedia = async (episodeNum?: number) => {
+  const playMedia = async (lang: 'spanish' | 'english', episodeNum?: number) => {
     if (!selectedMovie) return;
-    
-    // Ahora enviamos el ID de TMDB!
     const res = await fetch(`/api/stream?id=${selectedMovie.id}&type=${selectedMovie.type}&s=${selectedSeason}&e=${episodeNum || 1}`);
     const data = await res.json();
-    
-    // Devolvemos el link que mejor funcione
-    if (data.best_link) window.open(data.best_link, '_blank');
+    const url = lang === 'spanish' ? data.spanish : data.english;
+    if (url) window.open(url, '_blank');
   };
 
   return (
@@ -79,8 +76,8 @@ const App: React.FC = () => {
               <h3>ANIME</h3>
             </div>
             <div className="opt-card" onClick={() => setView('movies')}>
-              <div className="opt-icon">CINE & TV</div>
-              <h3>Vidsrc / Vidlink</h3>
+              <div className="opt-icon">🎬</div>
+              <h3>CINE & TV</h3>
             </div>
             <div className="opt-card" onClick={() => setView('cuevana')}>
               <div className="opt-icon">💎</div>
@@ -95,21 +92,14 @@ const App: React.FC = () => {
           <header className="header">
             <button className="back-btn" onClick={() => { setView('home'); setResults([]); }}>←</button>
             <form onSubmit={searchMedia} className="search-form">
-              <input 
-                placeholder={`Buscar en ${view}...`}
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-              />
+              <input placeholder={`Buscar...`} value={query} onChange={e => setQuery(e.target.value)} />
             </form>
           </header>
-
           <div className="results-grid">
             {results.map(movie => (
               <div key={movie.id} className="movie-item" onClick={() => setSelectedMovie(movie)}>
                 <img src={movie.poster} alt={movie.title} />
-                <div className="movie-info-mini">
-                  <span className="rating">⭐ {movie.rating.toFixed(1)}</span>
-                </div>
+                <div className="movie-info-mini"><span>⭐ {movie.rating.toFixed(1)}</span></div>
               </div>
             ))}
           </div>
@@ -118,40 +108,37 @@ const App: React.FC = () => {
 
       {selectedMovie && (
         <div className="modal-overlay" onClick={() => setSelectedMovie(null)}>
-          <div className="modal-container" onClick={e => e.stopPropagation()} style={{
-            backgroundImage: `linear-gradient(to bottom, rgba(15, 12, 41, 0.8), #0f0c29), url(${selectedMovie.backdrop})`
-          }}>
+          <div className="modal-container" style={{backgroundImage: `linear-gradient(to bottom, rgba(15, 12, 41, 0.9), #0f0c29), url(${selectedMovie.backdrop})`}}>
             <div className="modal-header">
               <img src={selectedMovie.poster} className="main-poster" />
               <div className="main-details">
                 <h1>{selectedMovie.title}</h1>
                 <p className="description">{selectedMovie.overview}</p>
                 {selectedMovie.type === 'movie' && (
-                  <button className="play-main-btn" onClick={() => playMedia()}>▶ REPRODUCIR PELÍCULA</button>
+                  <div className="btn-group">
+                    <button className="play-btn sp" onClick={() => playMedia('spanish')}>▶ VER EN ESPAÑOL</button>
+                    <button className="play-btn en" onClick={() => playMedia('english')}>▶ ORIGINAL / SUB</button>
+                  </div>
                 )}
               </div>
             </div>
 
             {selectedMovie.type === 'tv' && (
               <div className="tv-area">
-                <div className="season-picker">
-                  <span>Temporada</span>
-                  <select value={selectedSeason} onChange={e => setSelectedSeason(Number(e.target.value))}>
-                    {seasons.map(s => <option key={s.id} value={s.season_number}>{s.name}</option>)}
-                  </select>
-                </div>
-
+                <select className="season-select" value={selectedSeason} onChange={e => setSelectedSeason(Number(e.target.value))}>
+                  {seasons.map(s => <option key={s.id} value={s.season_number}>{s.name}</option>)}
+                </select>
                 <div className="episodes-scroll">
                   {episodes.map(ep => (
-                    <div key={ep.episode_number} className="ep-card" onClick={() => playMedia(ep.episode_number)}>
+                    <div key={ep.episode_number} className="ep-card">
                       <div className="ep-img-container">
                         <img src={ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : selectedMovie.poster} />
-                        <div className="ep-play-overlay">▶</div>
+                        <div className="ep-overlay">
+                          <button onClick={() => playMedia('spanish', ep.episode_number)}>ESPAÑOL</button>
+                          <button onClick={() => playMedia('english', ep.episode_number)}>SUB</button>
+                        </div>
                       </div>
-                      <div className="ep-meta">
-                        <span className="ep-num">{ep.episode_number}</span>
-                        <span className="ep-title">{ep.name}</span>
-                      </div>
+                      <span className="ep-title">{ep.episode_number}. {ep.name}</span>
                     </div>
                   ))}
                 </div>
@@ -163,30 +150,37 @@ const App: React.FC = () => {
       )}
 
       <style dangerouslySetInnerHTML={{ __html: `
-        :root { --accent: #ff0055; --bg: #0f0c29; --glass: rgba(255, 255, 255, 0.08); }
-        .app-container { color: white; font-family: 'Inter', sans-serif; min-height: 100vh; background: var(--bg); }
+        :root { --accent: #ff0055; --bg: #0f0c29; }
+        .app-container { color: white; font-family: sans-serif; min-height: 100vh; background: var(--bg); }
         .home-screen { text-align: center; padding-top: 10vh; }
-        .logo { font-size: 3.5rem; letter-spacing: 5px; margin-bottom: 3rem; }
-        .logo span { color: var(--accent); }
-        .main-options { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; padding: 1rem; }
-        .opt-card { background: var(--glass); padding: 2.5rem; border-radius: 25px; cursor: pointer; transition: 0.3s; width: 220px; border: 1px solid rgba(255,255,255,0.1); }
-        .opt-card:hover { transform: translateY(-10px); border-color: var(--accent); background: rgba(255,0,85,0.1); }
-        .header { display: flex; padding: 1.5rem; gap: 1rem; position: sticky; top: 0; background: var(--bg); z-index: 100; }
+        .logo { font-size: 3rem; margin-bottom: 2rem; }
+        .main-options { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+        .opt-card { background: rgba(255,255,255,0.1); padding: 2rem; border-radius: 20px; cursor: pointer; width: 200px; }
+        .header { display: flex; padding: 1rem; gap: 1rem; background: var(--bg); position: sticky; top: 0; z-index: 10; }
         .search-form { flex: 1; }
-        .search-form input { width: 100%; padding: 0.8rem 1.5rem; border-radius: 50px; border: none; background: var(--glass); color: white; outline: none; border: 1px solid transparent; transition: 0.3s; }
-        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; padding: 1rem; }
-        .movie-item { position: relative; border-radius: 12px; overflow: hidden; cursor: pointer; transition: 0.3s; }
-        .movie-item:hover { transform: scale(1.05); }
+        .search-form input { width: 100%; padding: 0.8rem; border-radius: 20px; border: none; background: rgba(255,255,255,0.1); color: white; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 1rem; padding: 1rem; }
+        .movie-item { border-radius: 10px; overflow: hidden; cursor: pointer; position: relative; }
         .movie-item img { width: 100%; display: block; }
-        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 1000; display: flex; align-items: center; justify-content: center; }
-        .modal-container { width: 95%; max-width: 1000px; max-height: 90vh; background-size: cover; border-radius: 30px; position: relative; overflow-y: auto; padding: 2.5rem; border: 1px solid rgba(255,255,255,0.1); }
-        .main-poster { width: 220px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
-        .play-main-btn { background: var(--accent); color: white; border: none; padding: 1rem 2.5rem; border-radius: 50px; font-weight: 800; cursor: pointer; }
-        .episodes-scroll { display: flex; gap: 1.2rem; overflow-x: auto; padding-bottom: 1rem; }
-        .ep-card { flex: 0 0 200px; cursor: pointer; }
-        .ep-img-container { position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; }
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 100; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+        .modal-container { width: 100%; max-width: 900px; max-height: 90vh; overflow-y: auto; background-size: cover; border-radius: 20px; padding: 2rem; position: relative; }
+        .modal-header { display: flex; gap: 1.5rem; flex-wrap: wrap; }
+        .main-poster { width: 180px; border-radius: 10px; }
+        .main-details { flex: 1; min-width: 280px; }
+        .btn-group { display: flex; gap: 1rem; margin-top: 1rem; }
+        .play-btn { border: none; padding: 0.8rem 1.5rem; border-radius: 10px; cursor: pointer; font-weight: bold; }
+        .play-btn.sp { background: var(--accent); color: white; }
+        .play-btn.en { background: white; color: black; }
+        .tv-area { margin-top: 1.5rem; }
+        .season-select { width: 100%; padding: 0.5rem; margin-bottom: 1rem; background: #222; color: white; }
+        .episodes-scroll { display: flex; gap: 1rem; overflow-x: auto; padding-bottom: 1rem; }
+        .ep-card { flex: 0 0 180px; }
+        .ep-img-container { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 16/9; }
         .ep-img-container img { width: 100%; height: 100%; object-fit: cover; }
-        .close-modal { position: absolute; top: 20px; right: 25px; background: none; border: none; color: white; font-size: 2.5rem; cursor: pointer; }
+        .ep-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: flex; flex-direction: column; gap: 5px; align-items: center; justify-content: center; opacity: 0; transition: 0.3s; }
+        .ep-card:hover .ep-overlay { opacity: 1; }
+        .ep-overlay button { padding: 4px 10px; font-size: 0.7rem; cursor: pointer; border: none; border-radius: 4px; }
+        .close-modal { position: absolute; top: 10px; right: 15px; background: none; border: none; color: white; font-size: 2rem; cursor: pointer; }
       `}} />
     </div>
   );
