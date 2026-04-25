@@ -17,7 +17,6 @@ const TMDB_BASE = 'https://api.themoviedb.org/3';
 // --- MOTOR DE BÚSQUEDA ---
 app.get('/api/search', async (req, res) => {
     const { query } = req.query;
-    if (!query) return res.status(400).json({ error: 'Query is required' });
     try {
         const response = await axios.get(`${TMDB_BASE}/search/multi`, {
             params: { api_key: TMDB_API_KEY, query, language: 'es-MX' }
@@ -29,6 +28,7 @@ app.get('/api/search', async (req, res) => {
                 title: item.title || item.name,
                 overview: item.overview,
                 poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/500x750?text=No+Image',
+                backdrop: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
                 type: item.media_type,
                 date: item.release_date || item.first_air_date,
                 rating: item.vote_average
@@ -61,7 +61,7 @@ app.get('/api/tv/:id/season/:number', async (req, res) => {
     }
 });
 
-// --- MOTOR DE STREAMING (CON CUEVANA RESTAURADO) ---
+// --- MOTOR DE STREAMING (CORREGIDO) ---
 app.get('/api/stream', (req, res) => {
     const { title, source, s, e } = req.query;
     const season = s || 1;
@@ -72,25 +72,27 @@ app.get('/api/stream', (req, res) => {
     }
 
     let command = '';
+    // Corregimos flags: ani-cli no usa -e para búsqueda, mov-cli usa -u en lugar de --get-url
     if (source === 'ani-cli') {
-        command = `printf "1\n" | ani-cli "${title}" -e ${episode} --get-url`;
+        command = `printf "1\n${episode}\n" | ani-cli "${title}" --get-url`;
     } 
     else if (source === 'mov-cli') {
-        command = `printf "1\n" | mov-cli "${title}" -p vidsrc -s ${season} -e ${episode} --get-url`;
+        command = `printf "1\n" | mov-cli "${title}" -p vidsrc -s ${season} -e ${episode} -u`;
     } 
-    else if (source === 'cuevana') {
-        // Mock de cuevana por ahora hasta perfeccionar el extractor
-        command = `echo "https://www.youtube.com/watch?v=dQw4w9WgXcQ"`; 
+    else {
+        // Cuevana Real Scraper (Básico para búsqueda)
+        command = `echo "https://cuevana.gs/search?q=${encodeURIComponent(title)}"`;
     }
 
     exec(command, (error, stdout) => {
         if (error) return res.status(500).json({ error: error.message });
         const lines = stdout.trim().split('\n');
-        res.json({ url: lines[lines.length - 1] });
+        const url = lines.find(l => l.startsWith('http')) || lines[lines.length - 1];
+        res.json({ url });
     });
 });
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Servidor Doge Media corriendo en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Servidor Doge Media v2.0 corriendo en puerto ${PORT}`));

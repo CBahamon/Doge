@@ -5,7 +5,9 @@ interface Movie {
   title: string;
   overview: string;
   poster: string;
+  backdrop: string;
   type: string;
+  rating: number;
 }
 
 interface Episode {
@@ -21,6 +23,7 @@ const App: React.FC = () => {
   const [results, setResults] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
+  
   const [seasons, setSeasons] = useState<any[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [selectedSeason, setSelectedSeason] = useState(1);
@@ -30,9 +33,9 @@ const App: React.FC = () => {
       fetch(`/api/tv/${selectedMovie.id}`)
         .then(res => res.json())
         .then(data => {
-          setSeasons(data.seasons || []);
-          const firstSeason = data.seasons?.find((s:any) => s.season_number > 0) || data.seasons?.[0];
-          setSelectedSeason(firstSeason?.season_number || 1);
+          const validSeasons = data.seasons?.filter((s:any) => s.season_number > 0) || [];
+          setSeasons(validSeasons);
+          setSelectedSeason(validSeasons[0]?.season_number || 1);
         });
     }
   }, [selectedMovie]);
@@ -48,61 +51,48 @@ const App: React.FC = () => {
   const searchMedia = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    try {
-      const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      setResults(data.results || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    setResults(data.results || []);
+    setLoading(false);
   };
 
   const playMedia = async (episodeNum?: number) => {
     const sourceMap = { anime: 'ani-cli', movies: 'mov-cli', cuevana: 'cuevana' };
     const source = sourceMap[view as keyof typeof sourceMap] || 'mov-cli';
-    const s = selectedSeason;
-    const e = episodeNum || 1;
-    
-    try {
-      const res = await fetch(`/api/stream?title=${encodeURIComponent(selectedMovie?.title || '')}&source=${source}&s=${s}&e=${e}`);
-      const data = await res.json();
-      if (data.url) window.open(data.url, '_blank');
-    } catch (err) {
-      alert("Error al obtener video");
-    }
+    const res = await fetch(`/api/stream?title=${encodeURIComponent(selectedMovie?.title || '')}&source=${source}&s=${selectedSeason}&e=${episodeNum || 1}`);
+    const data = await res.json();
+    if (data.url) window.open(data.url, '_blank');
   };
 
   return (
-    <div className="container" style={{ padding: '1rem', maxWidth: '1200px', margin: '0 auto' }}>
+    <div className="app-container">
       {view === 'home' && (
-        <div style={{ textAlign: 'center', marginTop: '5vh' }}>
-          <h1 className="main-title">Doge Media</h1>
-          <div className="home-grid">
-            <div className="glass-container card-hover option-card" onClick={() => setView('anime')}>
-              <span className="icon">⛩️</span>
-              <h2>Anime</h2>
+        <div className="home-screen">
+          <h1 className="logo">DOGE <span>MEDIA</span></h1>
+          <div className="main-options">
+            <div className="opt-card" onClick={() => setView('anime')}>
+              <div className="opt-icon">⛩️</div>
+              <h3>ANIME</h3>
             </div>
-            <div className="glass-container card-hover option-card" onClick={() => setView('movies')}>
-              <span className="icon">🎬</span>
-              <h2>Cine y TV</h2>
+            <div className="opt-card" onClick={() => setView('movies')}>
+              <div className="opt-icon">🎬</div>
+              <h3>CINE & TV</h3>
             </div>
-            <div className="glass-container card-hover option-card" onClick={() => setView('cuevana')}>
-              <span className="icon">💎</span>
-              <h2>Cuevana</h2>
+            <div className="opt-card" onClick={() => setView('cuevana')}>
+              <div className="opt-icon">💎</div>
+              <h3>CUEVANA</h3>
             </div>
           </div>
         </div>
       )}
 
       {view !== 'home' && (
-        <div>
-          <header className="view-header">
-            <button className="btn btn-primary" onClick={() => { setView('home'); setResults([]); setQuery(''); }}>← Volver</button>
-            <form onSubmit={searchMedia} style={{ flex: 1 }}>
+        <div className="browse-screen">
+          <header className="header">
+            <button className="back-btn" onClick={() => { setView('home'); setResults([]); }}>←</button>
+            <form onSubmit={searchMedia} className="search-form">
               <input 
-                className="glass-container search-input" 
                 placeholder={`Buscar en ${view}...`}
                 value={query}
                 onChange={e => setQuery(e.target.value)}
@@ -110,11 +100,13 @@ const App: React.FC = () => {
             </form>
           </header>
 
-          <div className="movie-grid">
+          <div className="results-grid">
             {results.map(movie => (
-              <div key={movie.id} className="glass-container movie-card" onClick={() => setSelectedMovie(movie)}>
+              <div key={movie.id} className="movie-item" onClick={() => setSelectedMovie(movie)}>
                 <img src={movie.poster} alt={movie.title} />
-                <h4 className="movie-title">{movie.title}</h4>
+                <div className="movie-info-mini">
+                  <span className="rating">⭐ {movie.rating.toFixed(1)}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -122,81 +114,109 @@ const App: React.FC = () => {
       )}
 
       {selectedMovie && (
-        <div className="modal-overlay" onClick={() => { setSelectedMovie(null); setEpisodes([]); }}>
-          <div className="glass-container modal-content" onClick={e => e.stopPropagation()}>
+        <div className="modal-overlay" onClick={() => setSelectedMovie(null)}>
+          <div className="modal-container" onClick={e => e.stopPropagation()} style={{
+            backgroundImage: `linear-gradient(to bottom, rgba(15, 12, 41, 0.8), #0f0c29), url(${selectedMovie.backdrop})`
+          }}>
             <div className="modal-header">
-              <img src={selectedMovie.poster} className="modal-poster" alt={selectedMovie.title} />
-              <div className="modal-info">
+              <img src={selectedMovie.poster} className="main-poster" />
+              <div className="main-details">
                 <h1>{selectedMovie.title}</h1>
-                <p className="overview">{selectedMovie.overview}</p>
+                <p className="description">{selectedMovie.overview}</p>
                 {selectedMovie.type === 'movie' && (
-                  <button className="btn btn-primary play-btn" onClick={() => playMedia()}>▶️ Reproducir Película</button>
+                  <button className="play-main-btn" onClick={() => playMedia()}>▶ REPRODUCIR AHORA</button>
                 )}
               </div>
             </div>
 
             {selectedMovie.type === 'tv' && (
-              <div className="episodes-area">
-                <label>Temporada:</label>
-                <select className="glass-container select-season" value={selectedSeason} onChange={e => setSelectedSeason(Number(e.target.value))}>
-                  {seasons.filter(s => s.season_number > 0).map(s => (
-                    <option key={s.id} value={s.season_number}>{s.name}</option>
-                  ))}
-                </select>
+              <div className="tv-area">
+                <div className="season-picker">
+                  <span>Temporada</span>
+                  <select value={selectedSeason} onChange={e => setSelectedSeason(Number(e.target.value))}>
+                    {seasons.map(s => <option key={s.id} value={s.season_number}>{s.name}</option>)}
+                  </select>
+                </div>
 
-                <div className="episode-list">
+                <div className="episodes-scroll">
                   {episodes.map(ep => (
-                    <div key={ep.episode_number} className="glass-container episode-item" onClick={() => playMedia(ep.episode_number)}>
-                      <div className="ep-thumb">
-                        {ep.still_path ? <img src={`https://image.tmdb.org/t/p/w300${ep.still_path}`} alt={ep.name} /> : <div className="no-img" />}
+                    <div key={ep.episode_number} className="ep-card" onClick={() => playMedia(ep.episode_number)}>
+                      <div className="ep-img-container">
+                        <img src={ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : selectedMovie.poster} />
+                        <div className="ep-play-overlay">▶</div>
                       </div>
-                      <div className="ep-info">
-                        <strong>{ep.episode_number}. {ep.name}</strong>
+                      <div className="ep-meta">
+                        <span className="ep-num">{ep.episode_number}</span>
+                        <span className="ep-title">{ep.name}</span>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
-            <button className="close-x" onClick={() => setSelectedMovie(null)}>×</button>
+            <button className="close-modal" onClick={() => setSelectedMovie(null)}>×</button>
           </div>
         </div>
       )}
 
       <style dangerouslySetInnerHTML={{ __html: `
-        :root { --accent: #e91e63; }
-        .main-title { font-size: clamp(2rem, 8vw, 4rem); margin-bottom: 2rem; }
-        .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
-        .option-card { padding: 2rem; cursor: pointer; transition: 0.3s; }
-        .icon { font-size: 3rem; display: block; margin-bottom: 1rem; }
+        :root { --accent: #ff0055; --bg: #0f0c29; --glass: rgba(255, 255, 255, 0.08); }
+        .app-container { color: white; font-family: 'Inter', sans-serif; min-height: 100vh; background: var(--bg); }
         
-        .view-header { display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; }
-        .search-input { width: 100%; padding: 0.8rem; border: none; color: white; }
+        /* HOME */
+        .home-screen { text-align: center; padding-top: 10vh; }
+        .logo { font-size: 3.5rem; letter-spacing: 5px; margin-bottom: 3rem; }
+        .logo span { color: var(--accent); }
+        .main-options { display: flex; gap: 2rem; justify-content: center; flex-wrap: wrap; padding: 1rem; }
+        .opt-card { background: var(--glass); padding: 2.5rem; border-radius: 25px; cursor: pointer; transition: 0.3s; width: 220px; border: 1px solid rgba(255,255,255,0.1); }
+        .opt-card:hover { transform: translateY(-10px); border-color: var(--accent); background: rgba(255,0,85,0.1); }
+        .opt-icon { font-size: 3.5rem; margin-bottom: 1rem; }
         
-        .movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.5rem; }
-        .movie-card { cursor: pointer; transition: 0.3s; overflow: hidden; }
-        .movie-card img { width: 100%; height: auto; display: block; }
-        .movie-title { padding: 0.5rem; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        /* BROWSE */
+        .header { display: flex; padding: 1.5rem; gap: 1rem; position: sticky; top: 0; background: var(--bg); z-index: 100; }
+        .search-form { flex: 1; }
+        .search-form input { width: 100%; padding: 0.8rem 1.5rem; border-radius: 50px; border: none; background: var(--glass); color: white; outline: none; border: 1px solid transparent; transition: 0.3s; }
+        .search-form input:focus { border-color: var(--accent); }
+        .back-btn { background: var(--glass); border: none; color: white; padding: 0.5rem 1.2rem; border-radius: 50%; cursor: pointer; font-size: 1.2rem; }
         
-        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:2000; padding: 1rem; }
-        .modal-content { max-width: 900px; width:100%; max-height: 90vh; overflow-y: auto; padding: 2rem; position: relative; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 1rem; padding: 1rem; }
+        .movie-item { position: relative; border-radius: 12px; overflow: hidden; cursor: pointer; transition: 0.3s; }
+        .movie-item:hover { transform: scale(1.05); z-index: 10; }
+        .movie-item img { width: 100%; display: block; }
+        .movie-info-mini { position: absolute; bottom: 0; width: 100%; padding: 0.5rem; background: linear-gradient(transparent, black); font-size: 0.8rem; }
+        
+        /* MODAL */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.92); z-index: 1000; display: flex; align-items: center; justify-content: center; }
+        .modal-container { width: 95%; max-width: 1000px; max-height: 90vh; background-size: cover; background-position: center; border-radius: 30px; position: relative; overflow-y: auto; padding: 2.5rem; border: 1px solid rgba(255,255,255,0.1); }
         .modal-header { display: flex; gap: 2rem; flex-wrap: wrap; }
-        .modal-poster { width: clamp(150px, 30vw, 250px); border-radius: 10px; }
-        .modal-info { flex: 1; min-width: 250px; }
-        .overview { color: #ccc; line-height: 1.4; margin: 1rem 0; font-size: 0.9rem; }
-        .play-btn { width: 100%; padding: 1rem; font-size: 1.1rem; }
+        .main-poster { width: 220px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .main-details { flex: 1; min-width: 300px; }
+        .description { color: #ccc; line-height: 1.6; margin: 1.5rem 0; font-size: 0.95rem; }
+        .play-main-btn { background: var(--accent); color: white; border: none; padding: 1rem 2.5rem; border-radius: 50px; font-weight: 800; cursor: pointer; transition: 0.3s; }
         
-        .select-season { width: 100%; margin: 1rem 0; padding: 0.5rem; background: #111; color: white; }
-        .episode-list { display: flex; flexDirection: column; gap: 0.5rem; margin-top: 1rem; }
-        .episode-item { display: flex; gap: 1rem; padding: 0.5rem; align-items: center; cursor: pointer; }
-        .ep-thumb { width: 100px; height: 56px; background: #333; flex-shrink: 0; border-radius: 5px; overflow: hidden; }
-        .ep-thumb img { width: 100%; height: 100%; object-fit: cover; }
-        .close-x { position: absolute; top: 10px; right: 10px; background: none; border: none; color: white; font-size: 2rem; cursor: pointer; }
+        /* EPISODES SCROLL */
+        .tv-area { margin-top: 2rem; }
+        .season-picker { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+        .season-picker select { background: var(--glass); color: white; border: 1px solid rgba(255,255,255,0.2); padding: 0.5rem 1rem; border-radius: 10px; outline: none; }
+        
+        .episodes-scroll { display: flex; gap: 1.2rem; overflow-x: auto; padding-bottom: 1rem; scrollbar-width: thin; }
+        .ep-card { flex: 0 0 200px; cursor: pointer; transition: 0.3s; }
+        .ep-card:hover { transform: translateY(-5px); }
+        .ep-img-container { position: relative; border-radius: 12px; overflow: hidden; aspect-ratio: 16/9; margin-bottom: 0.8rem; }
+        .ep-img-container img { width: 100%; height: 100%; object-fit: cover; }
+        .ep-play-overlay { position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(255,0,85,0.4); display: flex; align-items: center; justify-content: center; opacity: 0; transition: 0.3s; font-size: 2rem; }
+        .ep-card:hover .ep-play-overlay { opacity: 1; }
+        .ep-meta { display: flex; gap: 0.5rem; align-items: baseline; }
+        .ep-num { font-weight: 800; color: var(--accent); }
+        .ep-title { font-size: 0.85rem; color: #eee; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        .close-modal { position: absolute; top: 20px; right: 25px; background: none; border: none; color: white; font-size: 2.5rem; cursor: pointer; }
         
         @media (max-width: 600px) {
-          .modal-content { padding: 1rem; }
-          .modal-header { gap: 1rem; }
-          .movie-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.8rem; }
+          .modal-container { padding: 1.5rem; }
+          .main-poster { width: 140px; }
+          .logo { font-size: 2.5rem; }
+          .opt-card { width: 100%; padding: 1.5rem; }
         }
       `}} />
     </div>
