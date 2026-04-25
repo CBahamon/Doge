@@ -12,17 +12,15 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
+const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// --- MOTOR DE BÚSQUEDA (TMDB) ---
+// --- MOTOR DE BÚSQUEDA ---
 app.get('/api/search', async (req, res) => {
     const { query } = req.query;
-    if (!query) return res.status(400).json({ error: 'Query is required' });
-
     try {
-        const response = await axios.get(`https://api.themoviedb.org/3/search/multi`, {
+        const response = await axios.get(`${TMDB_BASE}/search/multi`, {
             params: { api_key: TMDB_API_KEY, query, language: 'es-MX' }
         });
-
         const results = response.data.results
             .filter(item => item.media_type !== 'person')
             .map(item => ({
@@ -34,66 +32,65 @@ app.get('/api/search', async (req, res) => {
                 date: item.release_date || item.first_air_date,
                 rating: item.vote_average
             }));
-
         res.json({ results });
     } catch (error) {
-        console.error("Error en búsqueda TMDB:", error.message);
         res.status(500).json({ error: 'Error en búsqueda' });
     }
 });
 
-// --- MOTOR DE STREAMING (EL PUENTE) ---
-app.get('/api/stream', (req, res) => {
-    const { title, source } = req.query;
+// --- OBTENER DETALLES DE SERIE (TEMPORADAS) ---
+app.get('/api/tv/:id', async (req, res) => {
+    try {
+        const response = await axios.get(`${TMDB_BASE}/tv/${req.params.id}`, {
+            params: { api_key: TMDB_API_KEY, language: 'es-MX' }
+        });
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener temporadas' });
+    }
+});
 
-    console.log(`Petición de streaming: ${title} via ${source}`);
+// --- OBTENER EPISODIOS DE UNA TEMPORADA ---
+app.get('/api/tv/:id/season/:number', async (req, res) => {
+    try {
+        const response = await axios.get(`${TMDB_BASE}/tv/${req.params.id}/season/${req.params.number}`, {
+            params: { api_key: TMDB_API_KEY, language: 'es-MX' }
+        });
+        res.json(response.data);
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener episodios' });
+    }
+});
+
+// --- MOTOR DE STREAMING MEJORADO ---
+app.get('/api/stream', (req, res) => {
+    const { title, source, s, e } = req.query; // s = season, e = episode
 
     if (process.platform === 'win32') {
-        return res.json({ 
-            url: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4', 
-            provider: 'test-pc' 
-        });
+        return res.json({ url: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4' });
     }
 
     let command = '';
+    const season = s || 1;
+    const episode = e || 1;
 
-    // Usamos printf "1\n" para que elija automáticamente el primer resultado de la lista
     if (source === 'ani-cli') {
-        command = `printf "1\n" | ani-cli "${title}" --get-url`;
+        // ani-cli usa -e para el episodio. Para anime solemos usar numero de episodio total.
+        command = `printf "1\n" | ani-cli "${title}" -e ${episode} --get-url`;
     } 
     else if (source === 'mov-cli') {
-        command = `printf "1\n" | mov-cli "${title}" -p vidsrc --get-url`;
-    } 
-    else {
-        command = `echo "https://sample-link.com/video.mp4"`;
+        // mov-cli usa -s y -e para series
+        command = `printf "1\n" | mov-cli "${title}" -p vidsrc -s ${season} -e ${episode} --get-url`;
     }
 
-    console.log(`Ejecutando comando: ${command}`);
-
-    exec(command, (error, stdout, stderr) => {
-        if (error) {
-            console.error(`Error de ejecución: ${error.message}`);
-            return res.status(500).json({ error: 'Error al ejecutar herramienta', details: error.message });
-        }
-        
-        if (stderr) console.warn(`Advertencia de terminal: ${stderr}`);
-
+    exec(command, (error, stdout) => {
+        if (error) return res.status(500).json({ error: error.message });
         const lines = stdout.trim().split('\n');
-        const url = lines[lines.length - 1]; // Extraemos la última línea que es la URL
-        
-        console.log(`URL obtenida: ${url}`);
-        res.json({ url: url, provider: source });
+        res.json({ url: lines[lines.length - 1] });
     });
 });
 
-// Servir los archivos estáticos del frontend
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-// Ruta para SPA (Single Page Application)
-app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
-});
-
-app.listen(PORT, () => {
-    console.log(`Servidor Doge Media corriendo en puerto ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Servidor con soporte de episodios en puerto ${PORT}`));
