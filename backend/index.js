@@ -85,24 +85,42 @@ app.get('/api/stream', (req, res) => {
     const season = s || 1;
     const episode = e || 1;
 
-    // vidsrc.to es actualmente el mejor para encontrar servidores con audio Latino
-    const providers = {
-        latino: type === 'movie' 
-            ? `https://vidsrc.to/embed/movie/${id}` 
-            : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`,
-        
-        original: type === 'movie'
-            ? `https://vidlink.pro/movie/${id}`
-            : `https://vidlink.pro/tv/${id}/${season}/${episode}`
-    };
+    // Generamos 4 proveedores diferentes para que el usuario elija
+    const providers = [
+        {
+            name: 'Servidor Latino 1',
+            lang: 'Latino/ESP',
+            url: type === 'movie' 
+                ? `https://vidsrc.xyz/embed/movie/${id}` 
+                : `https://vidsrc.xyz/embed/tv/${id}/${season}/${episode}`
+        },
+        {
+            name: 'Servidor Latino 2',
+            lang: 'Latino/ESP',
+            url: type === 'movie' 
+                ? `https://vidsrc.icu/embed/movie/${id}` 
+                : `https://vidsrc.icu/embed/tv/${id}/${season}/${episode}`
+        },
+        {
+            name: 'Servidor Estable',
+            lang: 'Multi/Sub',
+            url: type === 'movie' 
+                ? `https://vidsrc.to/embed/movie/${id}` 
+                : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`
+        },
+        {
+            name: 'Servidor HD',
+            lang: 'Inglés/Sub',
+            url: type === 'movie'
+                ? `https://vidlink.pro/movie/${id}`
+                : `https://vidlink.pro/tv/${id}/${season}/${episode}`
+        }
+    ];
 
-    res.json({ 
-        spanish: providers.latino,
-        english: providers.original
-    });
+    res.json({ providers });
 });
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media v5.1 (TV Grid Mode) on port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media v5.5 (Multi-Server) on port ${PORT}`));
