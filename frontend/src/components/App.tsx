@@ -22,7 +22,7 @@ const App: React.FC = () => {
     if (!query) return;
     setLoading(true);
     try {
-      const response = await fetch(`http://localhost:3000/api/search?query=${encodeURIComponent(query)}&type=${view}`);
+      const response = await fetch(`/api/search?query=${encodeURIComponent(query)}&type=${view}`);
       const data = await response.json();
       setResults(data.results || []);
     } catch (error) {
@@ -37,7 +37,7 @@ const App: React.FC = () => {
     const source = sourceMap[view as keyof typeof sourceMap];
     
     try {
-      const response = await fetch(`http://localhost:3000/api/stream?title=${encodeURIComponent(movie.title)}&type=${movie.type}&source=${source}`);
+      const response = await fetch(`/api/stream?title=${encodeURIComponent(movie.title)}&type=${movie.type}&source=${source}`);
       const data = await response.json();
       if (data.url) {
         window.open(data.url, '_blank');

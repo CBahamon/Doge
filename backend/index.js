@@ -45,9 +45,9 @@ app.get('/api/stream', (req, res) => {
     const { title, type, source } = req.query; // source: 'ani-cli', 'mov-cli', 'cuevana'
 
     if (process.platform === 'win32') {
-        return res.json({ 
-            url: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4', 
-            provider: 'test-pc' 
+        return res.json({
+            url: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4',
+            provider: 'test-pc'
         });
     }
 
@@ -56,11 +56,11 @@ app.get('/api/stream', (req, res) => {
     if (source === 'ani-cli') {
         // -u especifica el nombre, --get-url devuelve solo el link
         command = `ani-cli -u "${title}" --get-url`;
-    } 
+    }
     else if (source === 'mov-cli') {
         // mov-cli puede ser lento, usamos vidsrc como provider por defecto
         command = `mov-cli "${title}" -p vidsrc --get-url`;
-    } 
+    }
     else if (source === 'cuevana') {
         // Aquí llamaríamos a la lógica de extracción de cuevana
         command = `echo "https://servidor-cuevana.com/video.mp4"`;
@@ -68,13 +68,22 @@ app.get('/api/stream', (req, res) => {
 
     exec(command, (error, stdout) => {
         if (error) return res.status(500).json({ error: 'Error al ejecutar herramienta', details: error.message });
-        
+
         // Limpiamos la salida por si las herramientas tiran basura de logs
         const lines = stdout.trim().split('\n');
         const url = lines[lines.length - 1]; // La última línea suele ser la URL
-        
+
         res.json({ url: url, provider: source });
     });
+});
+
+const path = require('path');
+// Servir los archivos estáticos del frontend
+app.use(express.static(path.join(__dirname, '../frontend/dist')));
+
+// Si alguien entra a la raíz, enviarle el index.html
+app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
 
 app.listen(PORT, () => {
