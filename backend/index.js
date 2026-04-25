@@ -12,7 +12,6 @@ const PORT = process.env.PORT || 3000;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// --- NUEVO: OBTENER TENDENCIAS PARA EL HOME ---
 app.get('/api/trending', async (req, res) => {
     try {
         const response = await axios.get(`${TMDB_BASE}/trending/all/week`, {
@@ -86,11 +85,11 @@ app.get('/api/stream', (req, res) => {
     const season = s || 1;
     const episode = e || 1;
 
-    // vidsrc.xyz es el que mejor maneja el español actualmente
+    // vidsrc.to es actualmente el mejor para encontrar servidores con audio Latino
     const providers = {
         latino: type === 'movie' 
-            ? `https://vidsrc.xyz/embed/movie/${id}` 
-            : `https://vidsrc.xyz/embed/tv/${id}/${season}/${episode}`,
+            ? `https://vidsrc.to/embed/movie/${id}` 
+            : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`,
         
         original: type === 'movie'
             ? `https://vidlink.pro/movie/${id}`
@@ -106,4 +105,4 @@ app.get('/api/stream', (req, res) => {
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media v5.0 (Trending Mode) on port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media v5.1 (TV Grid Mode) on port ${PORT}`));
