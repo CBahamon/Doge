@@ -61,7 +61,7 @@ app.get('/api/tv/:id/season/:number', async (req, res) => {
     }
 });
 
-// --- MOTOR DE STREAMING (EL HACK DEFINITIVO) ---
+// --- MOTOR DE STREAMING (EXTRACCIÓN ROBUSTA) ---
 app.get('/api/stream', (req, res) => {
     const { title, source, s, e } = req.query;
     const season = s || 1;
@@ -74,29 +74,34 @@ app.get('/api/stream', (req, res) => {
     let command = '';
     
     if (source === 'ani-cli') {
-        // Con fzf instalado, esto debería devolver el link
         command = `printf "1\n${episode}\n" | ani-cli "${title}" --get-url`;
     } 
     else if (source === 'mov-cli') {
-        // HACK: Forzamos el reproductor a 'echo' para que solo imprima la URL
+        // Quitamos flags problemáticos y usamos el entorno para forzar salida
         command = `printf "1\n" | MOV_CLI_PLAYER=echo mov-cli "${title}" -p vidsrc -s ${season} -e ${episode}`;
     }
 
     console.log(`Ejecutando: ${command}`);
 
     exec(command, (error, stdout, stderr) => {
-        if (error) return res.status(500).json({ error: error.message });
+        // Incluso si hay error en stderr, intentamos buscar una URL en stdout
+        const output = stdout + "\n" + stderr;
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const matches = output.match(urlRegex);
         
-        const lines = stdout.trim().split('\n');
-        // Buscamos la línea que empiece por http
-        const url = lines.find(l => l.trim().startsWith('http')) || lines[lines.length - 1];
-        
-        console.log(`Link capturado: ${url}`);
-        res.json({ url: url.trim() });
+        if (matches && matches.length > 0) {
+            // Buscamos la última URL que suele ser la del streaming final
+            const finalUrl = matches[matches.length - 1];
+            console.log(`URL Extraída: ${finalUrl}`);
+            return res.json({ url: finalUrl });
+        }
+
+        if (error) return res.status(500).json({ error: 'No se pudo obtener el link', details: error.message });
+        res.status(404).json({ error: 'No se encontró ninguna URL en la salida' });
     });
 });
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media Server v2.1 running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media Server v2.2 (Robust Mode) on port ${PORT}`));
