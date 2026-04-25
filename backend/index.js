@@ -10,83 +10,70 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const CUEVANA_URL = 'https://cuevana.gs';
+const TMDB_API_KEY = process.env.TMDB_API_KEY;
 
-// --- UTILIDADES DEL SCRAPER ---
-
-async function searchCuevana(query) {
-    try {
-        const searchUrl = `${CUEVANA_URL}/search?q=${encodeURIComponent(query)}`;
-        const { data } = await axios.get(searchUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
-        });
-
-        const $ = cheerio.load(data);
-        const results = [];
-
-        $('.result-item').each((i, element) => {
-            if (i < 5) { // Solo los primeros 5 resultados
-                const title = $(element).find('.title a').text();
-                const link = $(element).find('.title a').attr('href');
-                const image = $(element).find('img').attr('src');
-                results.push({ title, link, image });
-            }
-        });
-
-        return results;
-    } catch (error) {
-        console.error('Error en searchCuevana:', error.message);
-        return [];
-    }
-}
-
-// --- RUTAS API ---
-
+// --- MOTOR DE BÚSQUEDA (TMDB) ---
 app.get('/api/search', async (req, res) => {
     const { query, type } = req.query;
     if (!query) return res.status(400).json({ error: 'Query is required' });
 
-    console.log(`Buscando en Cuevana: ${query}`);
-    
-    // Si es anime, podríamos usar ani-cli, pero por ahora busquemos en Cuevana
-    const results = await searchCuevana(query);
-    
-    res.json({ results });
+    try {
+        const response = await axios.get(`https://api.themoviedb.org/3/search/multi`, {
+            params: { api_key: TMDB_API_KEY, query, language: 'es-MX' }
+        });
+
+        const results = response.data.results
+            .filter(item => item.media_type !== 'person')
+            .map(item => ({
+                id: item.id,
+                title: item.title || item.name,
+                overview: item.overview,
+                poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/500x750?text=No+Image',
+                type: item.media_type,
+                date: item.release_date || item.first_air_date,
+                rating: item.vote_average
+            }));
+
+        res.json({ results });
+    } catch (error) {
+        res.status(500).json({ error: 'Error en búsqueda' });
+    }
 });
 
-app.get('/api/stream', async (req, res) => {
-    const { url, name, type } = req.query;
+// --- MOTOR DE STREAMING (EL PUENTE) ---
+app.get('/api/stream', (req, res) => {
+    const { title, type, source } = req.query; // source: 'ani-cli', 'mov-cli', 'cuevana'
 
-    // Lógica para Anime con ani-cli (Solo funciona en el celular)
-    if (type === 'anime' && process.platform !== 'win32') {
-        exec(`ani-cli -u "${name}" --get-url`, (error, stdout) => {
-            if (error) return res.status(500).json({ error: 'Error en ani-cli' });
-            return res.json({ url: stdout.trim(), provider: 'ani-cli' });
-        });
-        return;
-    }
-
-    // Lógica para Cuevana (Simplificada: Por ahora devolvemos el link de la página para procesarlo)
-    // El scraping de links profundos (iframes) suele requerir un paso extra que haremos después
-    if (url) {
-        return res.json({ 
-            url: url, 
-            message: "En un futuro aquí extraeremos el .mp4 directamente del iframe",
-            provider: 'cuevana' 
-        });
-    }
-
-    // Mock para PC
     if (process.platform === 'win32') {
-        return res.json({
-            url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-            provider: 'mock'
-        });
+        return res.json({ url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', provider: 'test-pc' });
     }
 
-    res.status(400).json({ error: 'Faltan parámetros' });
+    let command = '';
+
+    if (source === 'ani-cli') {
+        // -u especifica el nombre, --get-url devuelve solo el link
+        command = `ani-cli -u "${title}" --get-url`;
+    } 
+    else if (source === 'mov-cli') {
+        // mov-cli puede ser lento, usamos vidsrc como provider por defecto
+        command = `mov-cli "${title}" -p vidsrc --get-url`;
+    } 
+    else if (source === 'cuevana') {
+        // Aquí llamaríamos a la lógica de extracción de cuevana
+        command = `echo "https://servidor-cuevana.com/video.mp4"`;
+    }
+
+    exec(command, (error, stdout) => {
+        if (error) return res.status(500).json({ error: 'Error al ejecutar herramienta', details: error.message });
+        
+        // Limpiamos la salida por si las herramientas tiran basura de logs
+        const lines = stdout.trim().split('\n');
+        const url = lines[lines.length - 1]; // La última línea suele ser la URL
+        
+        res.json({ url: url, provider: source });
+    });
 });
 
 app.listen(PORT, () => {
-    console.log(`Backend Scraper running on http://localhost:${PORT}`);
+    console.log(`Servidor Triple-Motor corriendo en http://localhost:${PORT}`);
 });
