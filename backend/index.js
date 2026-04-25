@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const cheerio = require('cheerio');
 const { exec } = require('child_process');
 const path = require('path');
 
@@ -14,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// --- MOTOR DE BÚSQUEDA ---
+// --- BÚSQUEDA ---
 app.get('/api/search', async (req, res) => {
     const { query } = req.query;
     try {
@@ -39,6 +38,7 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
+// --- DETALLES ---
 app.get('/api/tv/:id', async (req, res) => {
     try {
         const response = await axios.get(`${TMDB_BASE}/tv/${req.params.id}`, {
@@ -61,7 +61,7 @@ app.get('/api/tv/:id/season/:number', async (req, res) => {
     }
 });
 
-// --- MOTOR DE STREAMING (EXTRACCIÓN ROBUSTA) ---
+// --- STREAMING (LIMPIEZA TOTAL) ---
 app.get('/api/stream', (req, res) => {
     const { title, source, s, e } = req.query;
     const season = s || 1;
@@ -74,34 +74,35 @@ app.get('/api/stream', (req, res) => {
     let command = '';
     
     if (source === 'ani-cli') {
-        command = `printf "1\n${episode}\n" | ani-cli "${title}" --get-url`;
+        // Probamos el comando que te funcionó manual
+        command = `printf "1\n" | ani-cli "${title}" -e ${episode} --get-url`;
     } 
     else if (source === 'mov-cli') {
-        // Quitamos flags problemáticos y usamos el entorno para forzar salida
         command = `printf "1\n" | MOV_CLI_PLAYER=echo mov-cli "${title}" -p vidsrc -s ${season} -e ${episode}`;
     }
 
     console.log(`Ejecutando: ${command}`);
 
-    exec(command, (error, stdout, stderr) => {
-        // Incluso si hay error en stderr, intentamos buscar una URL en stdout
+    // Aumentamos el tiempo de espera a 60 segundos porque estas herramientas son lentas
+    exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
         const output = stdout + "\n" + stderr;
-        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        console.log("Salida completa de la terminal:", output);
+
+        const urlRegex = /(https?:\/\/[^\s"'`<>]+)/g;
         const matches = output.match(urlRegex);
         
         if (matches && matches.length > 0) {
-            // Buscamos la última URL que suele ser la del streaming final
-            const finalUrl = matches[matches.length - 1];
-            console.log(`URL Extraída: ${finalUrl}`);
+            // Buscamos una URL que parezca de video (m3u8, mp4, etc) o la última
+            const finalUrl = matches.reverse().find(u => u.includes('m3u8') || u.includes('mp4') || u.includes('google') || u.includes('vid')) || matches[0];
+            console.log(`URL Capturada: ${finalUrl}`);
             return res.json({ url: finalUrl });
         }
 
-        if (error) return res.status(500).json({ error: 'No se pudo obtener el link', details: error.message });
-        res.status(404).json({ error: 'No se encontró ninguna URL en la salida' });
+        res.status(404).json({ error: 'No se encontró el link', output: output });
     });
 });
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media Server v2.2 (Robust Mode) on port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media v2.3 - Port ${PORT}`));
