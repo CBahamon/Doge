@@ -61,7 +61,7 @@ app.get('/api/tv/:id/season/:number', async (req, res) => {
     }
 });
 
-// --- MOTOR DE STREAMING (CORREGIDO) ---
+// --- MOTOR DE STREAMING (EL HACK DEFINITIVO) ---
 app.get('/api/stream', (req, res) => {
     const { title, source, s, e } = req.query;
     const season = s || 1;
@@ -72,27 +72,31 @@ app.get('/api/stream', (req, res) => {
     }
 
     let command = '';
-    // Corregimos flags: ani-cli no usa -e para búsqueda, mov-cli usa -u en lugar de --get-url
+    
     if (source === 'ani-cli') {
+        // Con fzf instalado, esto debería devolver el link
         command = `printf "1\n${episode}\n" | ani-cli "${title}" --get-url`;
     } 
     else if (source === 'mov-cli') {
-        command = `printf "1\n" | mov-cli "${title}" -p vidsrc -s ${season} -e ${episode} -u`;
-    } 
-    else {
-        // Cuevana Real Scraper (Básico para búsqueda)
-        command = `echo "https://cuevana.gs/search?q=${encodeURIComponent(title)}"`;
+        // HACK: Forzamos el reproductor a 'echo' para que solo imprima la URL
+        command = `printf "1\n" | MOV_CLI_PLAYER=echo mov-cli "${title}" -p vidsrc -s ${season} -e ${episode}`;
     }
 
-    exec(command, (error, stdout) => {
+    console.log(`Ejecutando: ${command}`);
+
+    exec(command, (error, stdout, stderr) => {
         if (error) return res.status(500).json({ error: error.message });
+        
         const lines = stdout.trim().split('\n');
-        const url = lines.find(l => l.startsWith('http')) || lines[lines.length - 1];
-        res.json({ url });
+        // Buscamos la línea que empiece por http
+        const url = lines.find(l => l.trim().startsWith('http')) || lines[lines.length - 1];
+        
+        console.log(`Link capturado: ${url}`);
+        res.json({ url: url.trim() });
     });
 });
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Servidor Doge Media v2.0 corriendo en puerto ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media Server v2.1 running on port ${PORT}`));
