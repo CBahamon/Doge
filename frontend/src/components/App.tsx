@@ -21,25 +21,22 @@ const App: React.FC = () => {
   const [results, setResults] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
-  
-  // Estados para Series
   const [seasons, setSeasons] = useState<any[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [selectedSeason, setSelectedSeason] = useState(1);
 
-  // Al seleccionar una serie, cargar sus temporadas
   useEffect(() => {
     if (selectedMovie && selectedMovie.type === 'tv') {
       fetch(`/api/tv/${selectedMovie.id}`)
         .then(res => res.json())
         .then(data => {
           setSeasons(data.seasons || []);
-          setSelectedSeason(data.seasons[0]?.season_number || 1);
+          const firstSeason = data.seasons?.find((s:any) => s.season_number > 0) || data.seasons?.[0];
+          setSelectedSeason(firstSeason?.season_number || 1);
         });
     }
   }, [selectedMovie]);
 
-  // Al cambiar de temporada, cargar sus episodios
   useEffect(() => {
     if (selectedMovie && selectedMovie.type === 'tv') {
       fetch(`/api/tv/${selectedMovie.id}/season/${selectedSeason}`)
@@ -51,52 +48,73 @@ const App: React.FC = () => {
   const searchMedia = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const res = await fetch(`/api/search?query=${query}`);
-    const data = await res.json();
-    setResults(data.results || []);
-    setLoading(false);
+    try {
+      const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
+      const data = await res.json();
+      setResults(data.results || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const playMedia = async (episodeNum?: number) => {
-    const source = view === 'anime' ? 'ani-cli' : 'mov-cli';
+    const sourceMap = { anime: 'ani-cli', movies: 'mov-cli', cuevana: 'cuevana' };
+    const source = sourceMap[view as keyof typeof sourceMap] || 'mov-cli';
     const s = selectedSeason;
     const e = episodeNum || 1;
     
-    const res = await fetch(`/api/stream?title=${selectedMovie?.title}&source=${source}&s=${s}&e=${e}`);
-    const data = await res.json();
-    if (data.url) window.open(data.url, '_blank');
+    try {
+      const res = await fetch(`/api/stream?title=${encodeURIComponent(selectedMovie?.title || '')}&source=${source}&s=${s}&e=${e}`);
+      const data = await res.json();
+      if (data.url) window.open(data.url, '_blank');
+    } catch (err) {
+      alert("Error al obtener video");
+    }
   };
 
   return (
-    <div className="container" style={{ padding: '2rem' }}>
+    <div className="container" style={{ padding: '1rem', maxWidth: '1200px', margin: '0 auto' }}>
       {view === 'home' && (
-        <div style={{ textAlign: 'center', marginTop: '10vh' }}>
-          <h1 style={{ fontSize: '3rem', marginBottom: '3rem' }}>Doge Media</h1>
-          <div style={{ display: 'flex', gap: '2rem', justifyContent: 'center' }}>
-            <div className="glass-container card-hover" onClick={() => setView('anime')} style={{ padding: '3rem', cursor: 'pointer' }}>⛩️ Anime</div>
-            <div className="glass-container card-hover" onClick={() => setView('movies')} style={{ padding: '3rem', cursor: 'pointer' }}>🎬 Cine y TV</div>
+        <div style={{ textAlign: 'center', marginTop: '5vh' }}>
+          <h1 className="main-title">Doge Media</h1>
+          <div className="home-grid">
+            <div className="glass-container card-hover option-card" onClick={() => setView('anime')}>
+              <span className="icon">⛩️</span>
+              <h2>Anime</h2>
+            </div>
+            <div className="glass-container card-hover option-card" onClick={() => setView('movies')}>
+              <span className="icon">🎬</span>
+              <h2>Cine y TV</h2>
+            </div>
+            <div className="glass-container card-hover option-card" onClick={() => setView('cuevana')}>
+              <span className="icon">💎</span>
+              <h2>Cuevana</h2>
+            </div>
           </div>
         </div>
       )}
 
       {view !== 'home' && (
         <div>
-          <button className="btn btn-primary" onClick={() => setView('home')}>← Volver</button>
-          <form onSubmit={searchMedia} style={{ margin: '2rem 0' }}>
-            <input 
-              className="glass-container" 
-              style={{ width: '100%', padding: '1rem', border: 'none', color: 'white', outline: 'none' }}
-              placeholder="Buscar..."
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-          </form>
+          <header className="view-header">
+            <button className="btn btn-primary" onClick={() => { setView('home'); setResults([]); setQuery(''); }}>← Volver</button>
+            <form onSubmit={searchMedia} style={{ flex: 1 }}>
+              <input 
+                className="glass-container search-input" 
+                placeholder={`Buscar en ${view}...`}
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+              />
+            </form>
+          </header>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '2rem' }}>
+          <div className="movie-grid">
             {results.map(movie => (
               <div key={movie.id} className="glass-container movie-card" onClick={() => setSelectedMovie(movie)}>
-                <img src={movie.poster} style={{ width: '100%', borderRadius: '15px' }} />
-                <h4 style={{ padding: '10px' }}>{movie.title}</h4>
+                <img src={movie.poster} alt={movie.title} />
+                <h4 className="movie-title">{movie.title}</h4>
               </div>
             ))}
           </div>
@@ -105,57 +123,81 @@ const App: React.FC = () => {
 
       {selectedMovie && (
         <div className="modal-overlay" onClick={() => { setSelectedMovie(null); setEpisodes([]); }}>
-          <div className="glass-container modal-content" onClick={e => e.stopPropagation()} style={{ maxHeight: '90vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', gap: '2rem', marginBottom: '2rem' }}>
-              <img src={selectedMovie.poster} style={{ width: '200px', borderRadius: '15px' }} />
-              <div>
+          <div className="glass-container modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <img src={selectedMovie.poster} className="modal-poster" alt={selectedMovie.title} />
+              <div className="modal-info">
                 <h1>{selectedMovie.title}</h1>
-                <p>{selectedMovie.overview}</p>
+                <p className="overview">{selectedMovie.overview}</p>
                 {selectedMovie.type === 'movie' && (
-                  <button className="btn btn-primary" style={{ marginTop: '20px' }} onClick={() => playMedia()}>▶️ Reproducir Película</button>
+                  <button className="btn btn-primary play-btn" onClick={() => playMedia()}>▶️ Reproducir Película</button>
                 )}
               </div>
             </div>
 
             {selectedMovie.type === 'tv' && (
-              <div className="episodes-section">
-                <h3>Temporadas</h3>
-                <select 
-                  className="glass-container" 
-                  style={{ background: '#222', color: 'white', padding: '10px', width: '100%', marginBottom: '2rem' }}
-                  value={selectedSeason}
-                  onChange={e => setSelectedSeason(Number(e.target.value))}
-                >
-                  {seasons.map(s => (
+              <div className="episodes-area">
+                <label>Temporada:</label>
+                <select className="glass-container select-season" value={selectedSeason} onChange={e => setSelectedSeason(Number(e.target.value))}>
+                  {seasons.filter(s => s.season_number > 0).map(s => (
                     <option key={s.id} value={s.season_number}>{s.name}</option>
                   ))}
                 </select>
 
-                <h3>Episodios</h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                <div className="episode-list">
                   {episodes.map(ep => (
-                    <div key={ep.episode_number} className="glass-container" style={{ display: 'flex', gap: '1rem', padding: '10px', alignItems: 'center', cursor: 'pointer' }} onClick={() => playMedia(ep.episode_number)}>
-                      <div style={{ width: '150px', height: '85px', background: '#333', borderRadius: '10px', flexShrink: 0, overflow: 'hidden' }}>
-                        {ep.still_path && <img src={`https://image.tmdb.org/t/p/w300${ep.still_path}`} style={{ width: '100%' }} />}
+                    <div key={ep.episode_number} className="glass-container episode-item" onClick={() => playMedia(ep.episode_number)}>
+                      <div className="ep-thumb">
+                        {ep.still_path ? <img src={`https://image.tmdb.org/t/p/w300${ep.still_path}`} alt={ep.name} /> : <div className="no-img" />}
                       </div>
-                      <div>
+                      <div className="ep-info">
                         <strong>{ep.episode_number}. {ep.name}</strong>
-                        <p style={{ fontSize: '0.8rem', color: '#aaa', margin: '5px 0' }}>{ep.overview.substring(0, 100)}...</p>
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+            <button className="close-x" onClick={() => setSelectedMovie(null)}>×</button>
           </div>
         </div>
       )}
 
       <style dangerouslySetInnerHTML={{ __html: `
-        .card-hover:hover { border-color: var(--accent-color); transform: translateY(-5px); }
-        .movie-card:hover { transform: scale(1.05); cursor: pointer; }
-        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); display:flex; align-items:center; justify-content:center; z-index:1000; }
-        .modal-content { max-width: 800px; width:90%; padding: 2rem; }
+        :root { --accent: #e91e63; }
+        .main-title { font-size: clamp(2rem, 8vw, 4rem); margin-bottom: 2rem; }
+        .home-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; }
+        .option-card { padding: 2rem; cursor: pointer; transition: 0.3s; }
+        .icon { font-size: 3rem; display: block; margin-bottom: 1rem; }
+        
+        .view-header { display: flex; gap: 1rem; align-items: center; margin-bottom: 2rem; flex-wrap: wrap; }
+        .search-input { width: 100%; padding: 0.8rem; border: none; color: white; }
+        
+        .movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1.5rem; }
+        .movie-card { cursor: pointer; transition: 0.3s; overflow: hidden; }
+        .movie-card img { width: 100%; height: auto; display: block; }
+        .movie-title { padding: 0.5rem; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        .modal-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); display:flex; align-items:center; justify-content:center; z-index:2000; padding: 1rem; }
+        .modal-content { max-width: 900px; width:100%; max-height: 90vh; overflow-y: auto; padding: 2rem; position: relative; }
+        .modal-header { display: flex; gap: 2rem; flex-wrap: wrap; }
+        .modal-poster { width: clamp(150px, 30vw, 250px); border-radius: 10px; }
+        .modal-info { flex: 1; min-width: 250px; }
+        .overview { color: #ccc; line-height: 1.4; margin: 1rem 0; font-size: 0.9rem; }
+        .play-btn { width: 100%; padding: 1rem; font-size: 1.1rem; }
+        
+        .select-season { width: 100%; margin: 1rem 0; padding: 0.5rem; background: #111; color: white; }
+        .episode-list { display: flex; flexDirection: column; gap: 0.5rem; margin-top: 1rem; }
+        .episode-item { display: flex; gap: 1rem; padding: 0.5rem; align-items: center; cursor: pointer; }
+        .ep-thumb { width: 100px; height: 56px; background: #333; flex-shrink: 0; border-radius: 5px; overflow: hidden; }
+        .ep-thumb img { width: 100%; height: 100%; object-fit: cover; }
+        .close-x { position: absolute; top: 10px; right: 10px; background: none; border: none; color: white; font-size: 2rem; cursor: pointer; }
+        
+        @media (max-width: 600px) {
+          .modal-content { padding: 1rem; }
+          .modal-header { gap: 1rem; }
+          .movie-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 0.8rem; }
+        }
       `}} />
     </div>
   );
