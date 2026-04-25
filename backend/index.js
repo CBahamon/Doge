@@ -45,7 +45,10 @@ app.get('/api/stream', (req, res) => {
     const { title, type, source } = req.query; // source: 'ani-cli', 'mov-cli', 'cuevana'
 
     if (process.platform === 'win32') {
-        return res.json({ url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', provider: 'test-pc' });
+        return res.json({ 
+            url: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4', 
+            provider: 'test-pc' 
+        });
     }
 
     let command = '';
