@@ -37,7 +37,7 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
-// --- DETALLES DE TEMPORADAS ---
+// --- DETALLES DE SERIE ---
 app.get('/api/tv/:id', async (req, res) => {
     try {
         const response = await axios.get(`${TMDB_BASE}/tv/${req.params.id}`, {
@@ -60,17 +60,19 @@ app.get('/api/tv/:id/season/:number', async (req, res) => {
     }
 });
 
-// --- EL NUEVO MOTOR DE LINKS (MULTI-PROVIDER) ---
+// --- MOTOR DE STREAMING (FIXED) ---
 app.get('/api/stream', (req, res) => {
-    const { id, type, s, e } = req.query; // Usamos el ID de TMDB ahora!
+    const { id, type, s, e } = req.query;
     
-    if (!id || !type) return res.status(400).json({ error: 'Faltan ID o Tipo' });
+    console.log(`Petición Recibida - ID: ${id}, Tipo: ${type}, T: ${s}, E: ${e}`);
+
+    if (!id || !type) {
+        return res.status(400).json({ error: 'Faltan parámetros críticos (id o type)' });
+    }
 
     const season = s || 1;
     const episode = e || 1;
 
-    // Construimos una lista de servidores (Providers)
-    // Estos links son los que usan las mejores webs de streaming actuales
     const providers = {
         vidsrc_to: type === 'movie' 
             ? `https://vidsrc.to/embed/movie/${id}` 
@@ -78,24 +80,15 @@ app.get('/api/stream', (req, res) => {
         
         vidlink: type === 'movie'
             ? `https://vidlink.pro/movie/${id}`
-            : `https://vidlink.pro/tv/${id}/${season}/${episode}`,
-            
-        vidsrc_me: type === 'movie'
-            ? `https://vidsrc.me/embed/movie?tmdb=${id}`
-            : `https://vidsrc.me/embed/tv?tmdb=${id}&sea=${season}&epi=${episode}`,
-
-        vidsrc_xyz: type === 'movie'
-            ? `https://vidsrc.xyz/embed/movie?tmdb=${id}`
-            : `https://vidsrc.xyz/embed/tv?tmdb=${id}&sea=${season}&epi=${episode}`
+            : `https://vidlink.pro/tv/${id}/${season}/${episode}`
     };
 
     res.json({ 
-        links: providers,
-        best_link: providers.vidsrc_to // Ponemos vidsrc.to como el principal
+        best_link: providers.vidlink // Vidlink suele ser más estable hoy
     });
 });
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media v3.0 (API-ID Mode) on port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media v3.1 (Fixed Params) on port ${PORT}`));
