@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const axios = require('axios');
-const { exec } = require('child_process');
 const path = require('path');
 
 const app = express();
@@ -13,7 +12,7 @@ const PORT = process.env.PORT || 3000;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
-// --- BÚSQUEDA ---
+// --- MOTOR DE BÚSQUEDA (TMDB) ---
 app.get('/api/search', async (req, res) => {
     const { query } = req.query;
     try {
@@ -38,7 +37,7 @@ app.get('/api/search', async (req, res) => {
     }
 });
 
-// --- DETALLES ---
+// --- DETALLES DE TEMPORADAS ---
 app.get('/api/tv/:id', async (req, res) => {
     try {
         const response = await axios.get(`${TMDB_BASE}/tv/${req.params.id}`, {
@@ -61,50 +60,42 @@ app.get('/api/tv/:id/season/:number', async (req, res) => {
     }
 });
 
-// --- STREAMING (MULTI-PIPE) ---
+// --- EL NUEVO MOTOR DE LINKS (MULTI-PROVIDER) ---
 app.get('/api/stream', (req, res) => {
-    const { title, source, s, e } = req.query;
+    const { id, type, s, e } = req.query; // Usamos el ID de TMDB ahora!
+    
+    if (!id || !type) return res.status(400).json({ error: 'Faltan ID o Tipo' });
+
     const season = s || 1;
     const episode = e || 1;
 
-    if (process.platform === 'win32') {
-        return res.json({ url: 'https://archive.org/download/BigBuckBunny_124/Content/big_buck_bunny_720p_surround.mp4' });
-    }
-
-    let command = '';
-    
-    if (source === 'ani-cli') {
-        // Enviamos "1\n" para el anime y "1\n" para el servidor de video
-        command = `printf "1\n1\n" | ani-cli "${title}" -e ${episode} --get-url`;
-    } 
-    else if (source === 'mov-cli') {
-        // Hacemos lo mismo para mov-cli por si acaso pide servidor
-        command = `printf "1\n1\n" | MOV_CLI_PLAYER=echo mov-cli "${title}" -p vidsrc -s ${season} -e ${episode}`;
-    }
-
-    console.log(`Ejecutando: ${command}`);
-
-    exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
-        const output = stdout + "\n" + stderr;
-        console.log("Salida terminal:", output);
-
-        const urlRegex = /(https?:\/\/[^\s"'`<>]+)/g;
-        const matches = output.match(urlRegex);
+    // Construimos una lista de servidores (Providers)
+    // Estos links son los que usan las mejores webs de streaming actuales
+    const providers = {
+        vidsrc_to: type === 'movie' 
+            ? `https://vidsrc.to/embed/movie/${id}` 
+            : `https://vidsrc.to/embed/tv/${id}/${season}/${episode}`,
         
-        if (matches && matches.length > 0) {
-            const finalUrl = matches.reverse().find(u => 
-                u.includes('m3u8') || u.includes('mp4') || u.includes('google') || u.includes('vid') || u.includes('stream')
-            ) || matches[0];
+        vidlink: type === 'movie'
+            ? `https://vidlink.pro/movie/${id}`
+            : `https://vidlink.pro/tv/${id}/${season}/${episode}`,
             
-            console.log(`URL Capturada: ${finalUrl}`);
-            return res.json({ url: finalUrl });
-        }
+        vidsrc_me: type === 'movie'
+            ? `https://vidsrc.me/embed/movie?tmdb=${id}`
+            : `https://vidsrc.me/embed/tv?tmdb=${id}&sea=${season}&epi=${episode}`,
 
-        res.status(404).json({ error: 'No se encontró el link', output: output });
+        vidsrc_xyz: type === 'movie'
+            ? `https://vidsrc.xyz/embed/movie?tmdb=${id}`
+            : `https://vidsrc.xyz/embed/tv?tmdb=${id}&sea=${season}&epi=${episode}`
+    };
+
+    res.json({ 
+        links: providers,
+        best_link: providers.vidsrc_to // Ponemos vidsrc.to como el principal
     });
 });
 
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media v2.4 (Multi-Pipe) - Port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media v3.0 (API-ID Mode) on port ${PORT}`));
