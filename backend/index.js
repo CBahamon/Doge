@@ -61,7 +61,7 @@ app.get('/api/tv/:id/season/:number', async (req, res) => {
     }
 });
 
-// --- STREAMING (LIMPIEZA TOTAL) ---
+// --- STREAMING (MULTI-PIPE) ---
 app.get('/api/stream', (req, res) => {
     const { title, source, s, e } = req.query;
     const season = s || 1;
@@ -74,26 +74,28 @@ app.get('/api/stream', (req, res) => {
     let command = '';
     
     if (source === 'ani-cli') {
-        // Probamos el comando que te funcionó manual
-        command = `printf "1\n" | ani-cli "${title}" -e ${episode} --get-url`;
+        // Enviamos "1\n" para el anime y "1\n" para el servidor de video
+        command = `printf "1\n1\n" | ani-cli "${title}" -e ${episode} --get-url`;
     } 
     else if (source === 'mov-cli') {
-        command = `printf "1\n" | MOV_CLI_PLAYER=echo mov-cli "${title}" -p vidsrc -s ${season} -e ${episode}`;
+        // Hacemos lo mismo para mov-cli por si acaso pide servidor
+        command = `printf "1\n1\n" | MOV_CLI_PLAYER=echo mov-cli "${title}" -p vidsrc -s ${season} -e ${episode}`;
     }
 
     console.log(`Ejecutando: ${command}`);
 
-    // Aumentamos el tiempo de espera a 60 segundos porque estas herramientas son lentas
     exec(command, { timeout: 60000 }, (error, stdout, stderr) => {
         const output = stdout + "\n" + stderr;
-        console.log("Salida completa de la terminal:", output);
+        console.log("Salida terminal:", output);
 
         const urlRegex = /(https?:\/\/[^\s"'`<>]+)/g;
         const matches = output.match(urlRegex);
         
         if (matches && matches.length > 0) {
-            // Buscamos una URL que parezca de video (m3u8, mp4, etc) o la última
-            const finalUrl = matches.reverse().find(u => u.includes('m3u8') || u.includes('mp4') || u.includes('google') || u.includes('vid')) || matches[0];
+            const finalUrl = matches.reverse().find(u => 
+                u.includes('m3u8') || u.includes('mp4') || u.includes('google') || u.includes('vid') || u.includes('stream')
+            ) || matches[0];
+            
             console.log(`URL Capturada: ${finalUrl}`);
             return res.json({ url: finalUrl });
         }
@@ -105,4 +107,4 @@ app.get('/api/stream', (req, res) => {
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media v2.3 - Port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media v2.4 (Multi-Pipe) - Port ${PORT}`));
