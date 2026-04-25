@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
+const cheerio = require('cheerio');
 const { exec } = require('child_process');
 
 const app = express();
@@ -8,72 +10,83 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
+const CUEVANA_URL = 'https://cuevana.gs';
 
-// Middleware simple para logs
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
+// --- UTILIDADES DEL SCRAPER ---
 
-// RUTA DE PRUEBA: Estado del servidor
-app.get('/api/status', (req, res) => {
-  res.json({ status: 'online', platform: process.platform });
-});
+async function searchCuevana(query) {
+    try {
+        const searchUrl = `${CUEVANA_URL}/search?q=${encodeURIComponent(query)}`;
+        const { data } = await axios.get(searchUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36' }
+        });
 
-// RUTA: Buscar Películas/Anime (TMDB Placeholder)
-app.get('/api/search', async (req, res) => {
-  const { query, type } = req.query; // type: 'movie' o 'tv' o 'anime'
-  
-  if (!query) return res.status(400).json({ error: 'Query is required' });
+        const $ = cheerio.load(data);
+        const results = [];
 
-  console.log(`Buscando ${type || 'todo'} para: ${query}`);
-  
-  // Aquí irá la lógica de TMDB
-  res.json({
-    results: [
-      {
-        id: 1,
-        title: `${query} (Ejemplo)`,
-        overview: 'Esta es una descripción de prueba para ver el diseño.',
-        poster_path: 'https://via.placeholder.com/500x750?text=Poster',
-        release_date: '2024-01-01',
-        media_type: type || 'movie'
-      }
-    ]
-  });
-});
+        $('.result-item').each((i, element) => {
+            if (i < 5) { // Solo los primeros 5 resultados
+                const title = $(element).find('.title a').text();
+                const link = $(element).find('.title a').attr('href');
+                const image = $(element).find('img').attr('src');
+                results.push({ title, link, image });
+            }
+        });
 
-// RUTA: Obtener link de video
-app.get('/api/stream', (req, res) => {
-  const { name, type } = req.query;
-
-  if (!name) return res.status(400).json({ error: 'Name is required' });
-
-  // Si estamos en Windows/PC, devolvemos un video de prueba
-  if (process.platform === 'win32') {
-    return res.json({
-      url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
-      provider: 'mock-provider'
-    });
-  }
-
-  // Si estamos en Linux (el celular), ejecutamos el scraper
-  let command = '';
-  if (type === 'anime') {
-    command = `ani-cli -u "${name}" --get-url`;
-  } else {
-    // Aquí irá el scraper de Cuevana o mov-cli
-    command = `echo "https://sample-link.com/video.mp4"`; 
-  }
-
-  exec(command, (error, stdout, stderr) => {
-    if (error) {
-        return res.status(500).json({ error: 'Error al obtener el stream', details: error.message });
+        return results;
+    } catch (error) {
+        console.error('Error en searchCuevana:', error.message);
+        return [];
     }
-    res.json({ url: stdout.trim(), provider: type === 'anime' ? 'ani-cli' : 'scraper' });
-  });
+}
+
+// --- RUTAS API ---
+
+app.get('/api/search', async (req, res) => {
+    const { query, type } = req.query;
+    if (!query) return res.status(400).json({ error: 'Query is required' });
+
+    console.log(`Buscando en Cuevana: ${query}`);
+    
+    // Si es anime, podríamos usar ani-cli, pero por ahora busquemos en Cuevana
+    const results = await searchCuevana(query);
+    
+    res.json({ results });
+});
+
+app.get('/api/stream', async (req, res) => {
+    const { url, name, type } = req.query;
+
+    // Lógica para Anime con ani-cli (Solo funciona en el celular)
+    if (type === 'anime' && process.platform !== 'win32') {
+        exec(`ani-cli -u "${name}" --get-url`, (error, stdout) => {
+            if (error) return res.status(500).json({ error: 'Error en ani-cli' });
+            return res.json({ url: stdout.trim(), provider: 'ani-cli' });
+        });
+        return;
+    }
+
+    // Lógica para Cuevana (Simplificada: Por ahora devolvemos el link de la página para procesarlo)
+    // El scraping de links profundos (iframes) suele requerir un paso extra que haremos después
+    if (url) {
+        return res.json({ 
+            url: url, 
+            message: "En un futuro aquí extraeremos el .mp4 directamente del iframe",
+            provider: 'cuevana' 
+        });
+    }
+
+    // Mock para PC
+    if (process.platform === 'win32') {
+        return res.json({
+            url: 'http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4',
+            provider: 'mock'
+        });
+    }
+
+    res.status(400).json({ error: 'Faltan parámetros' });
 });
 
 app.listen(PORT, () => {
-  console.log(`Backend media server running on http://localhost:${PORT}`);
+    console.log(`Backend Scraper running on http://localhost:${PORT}`);
 });
