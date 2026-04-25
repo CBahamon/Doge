@@ -1,45 +1,42 @@
+@import "tailwindcss";
+
 :root {
-  --bg-color: #0f0c29;
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
-  --text-color: #ffffff;
-  --accent-color: #e91e63;
+  --bg-color: #0a0a0c;
+  --accent-color: #f43f5e;
 }
 
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-  color: var(--text-color);
-  min-height: 100vh;
-  overflow-x: hidden;
-}
-
-.glass-container {
-  background: var(--glass-bg);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-}
-
-.btn {
-  padding: 10px 20px;
-  border-radius: 10px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  font-weight: 600;
-}
-
-.btn-primary {
-  background: var(--accent-color);
+  background-color: var(--bg-color);
   color: white;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
-.btn-primary:hover {
-  transform: scale(1.05);
-  box-shadow: 0 0 15px var(--accent-color);
+/* Scrollbar personalizada para el look de App */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(244, 63, 94, 0.3);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(244, 63, 94, 0.5);
+}
+
+/* Utilidad para ocultar scrollbar en los carruseles de episodios */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
