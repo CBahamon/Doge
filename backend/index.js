@@ -12,6 +12,29 @@ const PORT = process.env.PORT || 3000;
 const TMDB_API_KEY = process.env.TMDB_API_KEY;
 const TMDB_BASE = 'https://api.themoviedb.org/3';
 
+// --- NUEVO: OBTENER TENDENCIAS PARA EL HOME ---
+app.get('/api/trending', async (req, res) => {
+    try {
+        const response = await axios.get(`${TMDB_BASE}/trending/all/week`, {
+            params: { api_key: TMDB_API_KEY, language: 'es-MX' }
+        });
+        const results = response.data.results
+            .filter(item => item.media_type !== 'person')
+            .map(item => ({
+                id: item.id,
+                title: item.title || item.name,
+                poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/500x750',
+                backdrop: `https://image.tmdb.org/t/p/original${item.backdrop_path}`,
+                type: item.media_type,
+                rating: item.vote_average,
+                date: item.release_date || item.first_air_date
+            }));
+        res.json({ results });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al obtener tendencias' });
+    }
+});
+
 app.get('/api/search', async (req, res) => {
     const { query } = req.query;
     try {
@@ -24,8 +47,8 @@ app.get('/api/search', async (req, res) => {
                 id: item.id,
                 title: item.title || item.name,
                 overview: item.overview,
-                poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/500x750?text=No+Image',
-                backdrop: item.backdrop_path ? `https://image.tmdb.org/t/p/original${item.backdrop_path}` : null,
+                poster: item.poster_path ? `https://image.tmdb.org/t/p/w500${item.poster_path}` : 'https://via.placeholder.com/500x750',
+                backdrop: `https://image.tmdb.org/t/p/original${item.backdrop_path}`,
                 type: item.media_type,
                 date: item.release_date || item.first_air_date,
                 rating: item.vote_average
@@ -63,11 +86,11 @@ app.get('/api/stream', (req, res) => {
     const season = s || 1;
     const episode = e || 1;
 
-    // vidsrc.icu y vidsrc.xyz suelen tener opciones de Latino dentro del reproductor
+    // vidsrc.xyz es el que mejor maneja el español actualmente
     const providers = {
         latino: type === 'movie' 
-            ? `https://vidsrc.icu/embed/movie/${id}` 
-            : `https://vidsrc.icu/embed/tv/${id}/${season}/${episode}`,
+            ? `https://vidsrc.xyz/embed/movie/${id}` 
+            : `https://vidsrc.xyz/embed/tv/${id}/${season}/${episode}`,
         
         original: type === 'movie'
             ? `https://vidlink.pro/movie/${id}`
@@ -83,4 +106,4 @@ app.get('/api/stream', (req, res) => {
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, '../frontend/dist/index.html')));
 
-app.listen(PORT, () => console.log(`Doge Media v3.2 (Multilanguage) on port ${PORT}`));
+app.listen(PORT, () => console.log(`Doge Media v5.0 (Trending Mode) on port ${PORT}`));

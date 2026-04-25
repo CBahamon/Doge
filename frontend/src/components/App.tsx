@@ -19,22 +19,30 @@ interface Episode {
 }
 
 const App: React.FC = () => {
-  const [view, setView] = useState<'home' | 'browse'>('home');
-  const [category, setCategory] = useState<'anime' | 'movies' | 'cuevana'>('movies');
+  const [view, setView] = useState<'home' | 'search'>('home');
   const [query, setQuery] = useState('');
+  const [trending, setTrending] = useState<Movie[]>([]);
   const [results, setResults] = useState<Movie[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
+  
   const [seasons, setSeasons] = useState<any[]>([]);
   const [episodes, setEpisodes] = useState<Episode[]>([]);
   const [selectedSeason, setSelectedSeason] = useState(1);
+
+  // Cargar tendencias al iniciar
+  useEffect(() => {
+    fetch('/api/trending')
+      .then(res => res.json())
+      .then(data => setTrending(data.results || []));
+  }, []);
 
   useEffect(() => {
     if (selectedMovie && selectedMovie.type === 'tv') {
       fetch(`/api/tv/${selectedMovie.id}`)
         .then(res => res.json())
         .then(data => {
-          const validSeasons = data.seasons?.filter((s: any) => s.season_number > 0) || [];
+          const validSeasons = data.seasons?.filter((s:any) => s.season_number > 0) || [];
           setSeasons(validSeasons);
           setSelectedSeason(validSeasons[0]?.season_number || 1);
         });
@@ -53,16 +61,11 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!query) return;
     setLoading(true);
-    setView('browse');
-    try {
-      const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
-      const data = await res.json();
-      setResults(data.results || []);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    setView('search');
+    const res = await fetch(`/api/search?query=${encodeURIComponent(query)}`);
+    const data = await res.json();
+    setResults(data.results || []);
+    setLoading(false);
   };
 
   const playMedia = async (lang: 'spanish' | 'english', episodeNum?: number) => {
@@ -73,165 +76,131 @@ const App: React.FC = () => {
     if (url) window.open(url, '_blank');
   };
 
-  const renderHome = () => (
-    <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 animate-in fade-in duration-700">
-      <h1 className="text-6xl md:text-8xl font-black mb-12 tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-rose-500 to-orange-400">
-        DOGE<span className="text-white">MEDIA</span>
-      </h1>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
-        {[
-          { id: 'anime', label: 'ANIME', icon: '⛩️', color: 'from-purple-600 to-indigo-600' },
-          { id: 'movies', label: 'CINE & TV', icon: '🎬', color: 'from-rose-600 to-pink-600' },
-          { id: 'cuevana', label: 'CUEVANA', icon: '💎', color: 'from-amber-500 to-orange-500' }
-        ].map((opt) => (
-          <button
-            key={opt.id}
-            onClick={() => { setCategory(opt.id as any); setView('browse'); }}
-            className={`group relative overflow-hidden p-8 rounded-3xl bg-gradient-to-br ${opt.color} shadow-2xl transition-all duration-300 hover:scale-105 active:scale-95`}
-          >
-            <span className="block text-6xl mb-4 group-hover:animate-bounce">{opt.icon}</span>
-            <span className="text-2xl font-bold tracking-widest text-white">{opt.label}</span>
-          </button>
-        ))}
-      </div>
-      <form onSubmit={searchMedia} className="mt-16 w-full max-w-2xl relative">
-        <input
-          type="text"
-          placeholder="Busca tu próxima aventura..."
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="w-full p-6 pl-8 rounded-full bg-white/10 border border-white/20 text-white text-xl backdrop-blur-xl focus:outline-none focus:ring-4 focus:ring-rose-500/50 transition-all placeholder:text-white/40"
-        />
-        <button type="submit" className="absolute right-3 top-3 bottom-3 px-8 rounded-full bg-rose-500 text-white font-bold hover:bg-rose-600 transition-colors">
-          BUSCAR
-        </button>
-      </form>
-    </div>
-  );
-
-  const renderBrowse = () => (
-    <div className="p-4 md:p-8 animate-in slide-in-from-bottom duration-500">
-      <header className="flex flex-col md:flex-row items-center gap-6 mb-12">
-        <button 
-          onClick={() => { setView('home'); setResults([]); setQuery(''); }}
-          className="px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white font-bold transition-all"
+  return (
+    <div className="min-h-screen bg-[#070708] text-slate-100 font-sans selection:bg-rose-500">
+      {/* NAVBAR */}
+      <nav className="fixed top-0 w-full z-50 bg-gradient-to-b from-black/80 to-transparent backdrop-blur-sm p-4 md:px-12 flex items-center justify-between">
+        <h1 
+          onClick={() => { setView('home'); setQuery(''); }} 
+          className="text-3xl font-black tracking-tighter text-rose-500 cursor-pointer hover:scale-105 transition-transform"
         >
-          ← VOLVER
-        </button>
-        <form onSubmit={searchMedia} className="flex-1 w-full relative">
-          <input
-            type="text"
-            placeholder="Buscar más..."
+          DOGE<span className="text-white">MEDIA</span>
+        </h1>
+        <form onSubmit={searchMedia} className="relative w-full max-w-md ml-4">
+          <input 
+            type="text" 
+            placeholder="Buscar..." 
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full py-4 px-8 rounded-full bg-white/5 border border-white/10 text-white focus:outline-none focus:border-rose-500 transition-all"
+            onChange={e => setQuery(e.target.value)}
+            className="w-full bg-white/10 border border-white/10 rounded-full py-2 px-6 focus:outline-none focus:ring-2 focus:ring-rose-500 transition-all text-sm"
           />
         </form>
-      </header>
+      </nav>
 
-      {loading ? (
-        <div className="flex justify-center items-center h-64">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-rose-500"></div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
-          {results.map((movie) => (
-            <div 
-              key={movie.id} 
-              onClick={() => setSelectedMovie(movie)}
-              className="group relative rounded-xl overflow-hidden cursor-pointer transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(244,63,94,0.3)]"
-            >
-              <img src={movie.poster} className="w-full aspect-[2/3] object-cover" alt={movie.title} />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                <h4 className="font-bold text-white leading-tight">{movie.title}</h4>
-                <div className="flex items-center gap-2 mt-2">
-                  <span className="text-xs font-bold text-rose-500 bg-rose-500/20 px-2 py-0.5 rounded">⭐ {movie.rating.toFixed(1)}</span>
-                  <span className="text-xs text-gray-300">{movie.date?.split('-')[0]}</span>
+      <main className="pt-24 pb-12 px-4 md:px-12">
+        {view === 'home' && (
+          <section className="animate-in fade-in slide-in-from-bottom duration-700">
+            <h2 className="text-2xl font-bold mb-8 flex items-center gap-2">
+              <span className="w-2 h-8 bg-rose-500 rounded-full"></span>
+              Tendencias de la Semana
+            </h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+              {trending.map(movie => (
+                <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group cursor-pointer transition-all duration-300 hover:scale-105">
+                  <div className="relative aspect-[2/3] rounded-2xl overflow-hidden shadow-2xl">
+                    <img src={movie.poster} className="w-full h-full object-cover" />
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <span className="bg-rose-500 p-3 rounded-full text-white text-2xl">▶</span>
+                    </div>
+                  </div>
+                  <h4 className="mt-3 font-bold text-sm truncate">{movie.title}</h4>
+                  <p className="text-xs text-gray-500">{movie.date?.split('-')[0]} • ⭐ {movie.rating.toFixed(1)}</p>
                 </div>
-              </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
+          </section>
+        )}
 
-  return (
-    <div className="min-h-screen bg-[#0a0a0c] text-slate-100 selection:bg-rose-500">
-      {view === 'home' ? renderHome() : renderBrowse()}
+        {view === 'search' && (
+          <section className="animate-in fade-in duration-500">
+            <h2 className="text-2xl font-bold mb-8">Resultados para: <span className="text-rose-500">"{query}"</span></h2>
+            {loading ? (
+              <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-12 w-12 border-t-2 border-rose-500"></div></div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-6">
+                {results.map(movie => (
+                  <div key={movie.id} onClick={() => setSelectedMovie(movie)} className="group cursor-pointer transition-all duration-300 hover:scale-105">
+                    <div className="relative aspect-[2/3] rounded-2xl overflow-hidden shadow-xl">
+                      <img src={movie.poster} className="w-full h-full object-cover" />
+                    </div>
+                    <h4 className="mt-3 font-bold text-sm truncate">{movie.title}</h4>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+      </main>
 
+      {/* MODAL PREMIUM */}
       {selectedMovie && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8 bg-black/95 backdrop-blur-sm animate-in fade-in zoom-in duration-300"
-          onClick={() => setSelectedMovie(null)}
-        >
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md animate-in fade-in zoom-in duration-300" onClick={() => setSelectedMovie(null)}>
           <div 
-            className="relative w-full max-w-6xl max-h-[90vh] overflow-y-auto rounded-[2rem] bg-[#121214] border border-white/10 shadow-2xl flex flex-col md:flex-row"
+            className="relative w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-[2.5rem] bg-[#121214] border border-white/5 shadow-2xl flex flex-col md:flex-row overflow-hidden"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-full md:w-[400px] flex-shrink-0 relative overflow-hidden group">
-              <img src={selectedMovie.poster} className="w-full h-full object-cover" alt="" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#121214] to-transparent"></div>
+            <div className="w-full md:w-80 flex-shrink-0">
+              <img src={selectedMovie.poster} className="w-full h-full object-cover" />
             </div>
-
-            <div className="flex-1 p-8 md:p-12">
-              <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h2 className="text-4xl md:text-5xl font-black tracking-tight mb-4">{selectedMovie.title}</h2>
-                  <div className="flex items-center gap-4 text-sm font-bold opacity-60">
-                    <span className="text-rose-500">⭐ {selectedMovie.rating.toFixed(1)}</span>
-                    <span>{selectedMovie.date}</span>
-                    <span className="border border-white/20 px-2 rounded uppercase">{selectedMovie.type}</span>
+            <div className="flex-1 p-8 md:p-12" style={{backgroundImage: `linear-gradient(to right, #121214 20%, transparent), url(${selectedMovie.backdrop})`, backgroundSize: 'cover', backgroundPosition: 'center'}}>
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-6">
+                  <div>
+                    <h2 className="text-4xl md:text-5xl font-black mb-4 leading-tight">{selectedMovie.title}</h2>
+                    <div className="flex items-center gap-4 text-xs font-bold uppercase tracking-widest opacity-60">
+                      <span className="text-rose-500">⭐ {selectedMovie.rating.toFixed(1)}</span>
+                      <span>{selectedMovie.date}</span>
+                      <span className="border border-white/20 px-2 py-0.5 rounded">{selectedMovie.type}</span>
+                    </div>
                   </div>
+                  <button onClick={() => setSelectedMovie(null)} className="text-4xl opacity-50 hover:opacity-100 transition-opacity">×</button>
                 </div>
-                <button onClick={() => setSelectedMovie(null)} className="text-4xl opacity-50 hover:opacity-100 transition-opacity">×</button>
+                <p className="text-gray-300 leading-relaxed mb-8 max-w-xl text-lg">{selectedMovie.overview || "Sin descripción disponible."}</p>
+                
+                {selectedMovie.type === 'movie' ? (
+                  <div className="flex flex-wrap gap-4">
+                    <button onClick={() => playMedia('spanish')} className="px-8 py-4 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black transition-all flex items-center gap-3">
+                      <span className="text-2xl">🇪🇸</span> VER EN ESPAÑOL / LATINO
+                    </button>
+                    <button onClick={() => playMedia('english')} className="px-8 py-4 rounded-2xl bg-white/10 hover:bg-white/20 text-white font-black transition-all flex items-center gap-3">
+                      <span>🌐</span> ORIGINAL / SUB
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="inline-flex items-center gap-4 p-2 px-6 rounded-full bg-white/5 border border-white/10">
+                      <span className="text-sm font-bold opacity-60">TEMPORADA:</span>
+                      <select value={selectedSeason} onChange={e => setSelectedSeason(Number(e.target.value))} className="bg-transparent font-black text-rose-500 focus:outline-none">
+                        {seasons.map(s => <option key={s.id} value={s.season_number} className="bg-[#121214]">{s.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide">
+                      {episodes.map(ep => (
+                        <div key={ep.episode_number} className="flex-shrink-0 w-60 group">
+                          <div className="relative aspect-video rounded-xl overflow-hidden mb-3">
+                            <img src={ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : selectedMovie.backdrop} className="w-full h-full object-cover" />
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-2">
+                               <button onClick={() => playMedia('spanish', ep.episode_number)} className="bg-rose-500 px-4 py-1 rounded-full text-[10px] font-black uppercase">Español</button>
+                               <button onClick={() => playMedia('english', ep.episode_number)} className="bg-white/20 px-4 py-1 rounded-full text-[10px] font-black uppercase">Sub</button>
+                            </div>
+                          </div>
+                          <h5 className="font-bold text-xs truncate">{ep.episode_number}. {ep.name}</h5>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-
-              <p className="text-lg text-gray-400 leading-relaxed mb-8 max-w-2xl">{selectedMovie.overview || "Sin descripción disponible."}</p>
-
-              {selectedMovie.type === 'movie' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <button onClick={() => playMedia('spanish')} className="group flex items-center justify-center gap-3 p-5 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black transition-all">
-                    <span className="text-2xl group-hover:scale-110 transition-transform">🇪🇸</span> VER EN ESPAÑOL
-                  </button>
-                  <button onClick={() => playMedia('english')} className="flex items-center justify-center gap-3 p-5 rounded-2xl bg-white/5 hover:bg-white/10 text-white font-black border border-white/10 transition-all">
-                    <span>🌐</span> ORIGINAL / SUB
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-8">
-                  <div className="flex items-center gap-6 p-4 rounded-2xl bg-white/5 border border-white/10">
-                    <span className="font-bold opacity-60">TEMPORADA:</span>
-                    <select 
-                      value={selectedSeason} 
-                      onChange={e => setSelectedSeason(Number(e.target.value))}
-                      className="bg-transparent font-black text-xl text-rose-500 focus:outline-none"
-                    >
-                      {seasons.map(s => <option key={s.id} value={s.season_number} className="bg-[#121214]">{s.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-hide">
-                    {episodes.map(ep => (
-                      <div 
-                        key={ep.episode_number} 
-                        className="flex-shrink-0 w-64 group cursor-pointer"
-                        onClick={() => playMedia('spanish', ep.episode_number)}
-                      >
-                        <div className="relative aspect-video rounded-xl overflow-hidden mb-3">
-                          <img src={ep.still_path ? `https://image.tmdb.org/t/p/w300${ep.still_path}` : selectedMovie.backdrop} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                          <div className="absolute inset-0 bg-rose-500/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-4xl">▶</div>
-                        </div>
-                        <h5 className="font-bold text-sm truncate group-hover:text-rose-500 transition-colors">{ep.episode_number}. {ep.name}</h5>
-                        <div className="flex gap-2 mt-2">
-                           <button onClick={(e) => { e.stopPropagation(); playMedia('spanish', ep.episode_number); }} className="text-[10px] bg-rose-500 px-2 py-0.5 rounded font-bold">ESP</button>
-                           <button onClick={(e) => { e.stopPropagation(); playMedia('english', ep.episode_number); }} className="text-[10px] bg-white/10 px-2 py-0.5 rounded font-bold">SUB</button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
